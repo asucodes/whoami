@@ -77,4 +77,20 @@
       });
     });
   }
+
+  // read more toggle for homepage "other notes" section
+  var readMore = document.getElementById('read-more');
+  var otherNotes = document.getElementById('other-notes');
+  if (readMore && otherNotes) {
+    readMore.addEventListener('click', function(e) {
+      e.preventDefault();
+      if (otherNotes.style.display === 'none' || otherNotes.style.display === '') {
+        otherNotes.style.display = 'block';
+        readMore.textContent = 'show less';
+      } else {
+        otherNotes.style.display = 'none';
+        readMore.textContent = 'read more...';
+      }
+    });
+  }
 })();

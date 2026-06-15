@@ -31,7 +31,10 @@
 
       <p>links: <a href="https://github.com/asucodes">github</a> · <a href="https://x.com/asupasuyo">x</a></p>
 
-      <h2>recent work</h2>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5em;">
+        <h2>recent work</h2>
+        <a href="#" id="read-more" style="font-size: 0.85rem; color: #666; text-decoration: none;">read more...</a>
+      </div>
 
       <div class="post-teaser" data-tags="disclosure paywall client-side">
         <h2><a href="posts/newslaundry.html">Newslaundry Paywall Bypass via Redux State Injection and Hardcoded AES Key</a></h2>
@@ -54,19 +57,21 @@
         <p>nsut hostel wifi was blocking chess.com and game servers "for security". tried quic and hysteria2, still got spotted. the thing that worked was vless+ws+tls with utls chrome fingerprint + reality. later joined the hostel committee, told the warden, and the overbroad blocks got walked back. full story + networking explanation + the actual hostel group reactions when 55 ping suddenly worked.</p>
       </div>
 
-      <h2>other notes (read more)</h2>
-      <div class="post-teaser" data-tags="selenium bruteforce ethical">
-        <h2><a href="posts/NEET-DOB-Bruteforce.html">NEET NTA Scorecard Portal Rate Limiting and Anti-CAPTCHA Weaknesses (Ethical Research)</a></h2>
-        <div class="meta">2024 · ~8 min read</div>
-        <div class="tags"><span class="tag">selenium</span><span class="tag">bruteforce</span><span class="tag">ethical</span></div>
-        <p>after neet 2024 (multiple air 1s, grace marks drama, paper issues) the result lookup was still the old app-number + dob form. i got curious how trivial it was to recover a result if the app number leaked. built the selenium date walker as an independent demo of the oracle. strong ethical note + full cleaned code + selenium/headless setup in the repo.</p>
-      </div>
+      <div id="other-notes" style="display: none;">
+        <h2>other notes (read more)</h2>
+        <div class="post-teaser" data-tags="selenium bruteforce ethical">
+          <h2><a href="posts/NEET-DOB-Bruteforce.html">NEET NTA Scorecard Portal Rate Limiting and Anti-CAPTCHA Weaknesses (Ethical Research)</a></h2>
+          <div class="meta">2024 · ~8 min read</div>
+          <div class="tags"><span class="tag">selenium</span><span class="tag">bruteforce</span><span class="tag">ethical</span></div>
+          <p>after neet 2024 (multiple air 1s, grace marks drama, paper issues) the result lookup was still the old app-number + dob form. i got curious how trivial it was to recover a result if the app number leaked. built the selenium date walker as an independent demo of the oracle. strong ethical note + full cleaned code + selenium/headless setup in the repo.</p>
+        </div>
 
-      <div class="post-teaser" data-tags="webrtc streaming firewall">
-        <h2><a href="posts/streamit.html">WebRTC Watchparty with TURN for Surviving Restrictive Firewalls</a></h2>
-        <div class="meta">2025 · ~5 min read</div>
-        <div class="tags"><span class="tag">webrtc</span><span class="tag">streaming</span><span class="tag">firewall</span></div>
-        <p>native webrtc p2p watchparty (react + node + socket.io + simple-peer). worked great until the first restrictive network. a turn relay was the difference between dead and smooth. short note + full repo linked.</p>
+        <div class="post-teaser" data-tags="webrtc streaming firewall">
+          <h2><a href="posts/streamit.html">WebRTC Watchparty with TURN for Surviving Restrictive Firewalls</a></h2>
+          <div class="meta">2025 · ~5 min read</div>
+          <div class="tags"><span class="tag">webrtc</span><span class="tag">streaming</span><span class="tag">firewall</span></div>
+          <p>native webrtc p2p watchparty (react + node + socket.io + simple-peer). worked great until the first restrictive network. a turn relay was the difference between dead and smooth. short note + full repo linked.</p>
+        </div>
       </div>
 
       <p style="margin-top:2em; color:#666;">more stuff lives in the <a href="posts.html">posts</a> list. or the usual places.</p>
