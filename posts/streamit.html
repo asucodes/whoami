@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC Watchparty + TURN for Firewalls - asupasuyo</title>
+  <meta property="og:title" content="WebRTC Watchparty + TURN for Firewalls"/>
+  <meta property="og:description" content="webrtc watchparty and surviving firewalls"/>
+  <meta name="description" content="webrtc watchparty and surviving firewalls"/>
+  <link href="../css/fonts.css" rel="stylesheet"/>
+  <link rel="stylesheet" type="text/css" media="screen" href="../css/main.css"/>
+  <link rel="stylesheet" id="darkModeStyle" type="text/css" href="../css/dark.css"/>
+</head>
+<body>
+  <div class="content">
+    <header>
+      <div class="main" id="main_title">
+        <a href="../index.html">asupasuyo</a>
+      </div>
+      <nav>
+        <a href="../index.html">home</a>
+        <a href="../posts.html">posts</a>
+        <a href="../whoami.html">whoami</a>
+        <a href="#" id="theme-toggle" title="toggle dark">◐</a>
+      </nav>
+    </header>
+
+    <main>
+      <article>
+        <div class="title">
+          <h1 class="title">WebRTC Watchparty with TURN for Surviving Restrictive Firewalls</h1>
+          <div class="meta">2025 · ~5 min read</div>
+          <a href="https://github.com/asucodes/streamit" class="repo-link">full repo (react + node + webrtc + socket.io) on github</a>
+        </div>
+
+        <section class="body">
+          <p>streamit began as a small experiment in real-time shared viewing. one person would share their screen or camera while others watched with minimal delay and chatted in real time, complete with gifs and floating reactions. the stack was a react frontend, a node server using socket.io for signaling, and native webrtc through simple-peer for the actual media streams.</p>
+
+          <p>on a clean local network or a normal residential connection the peer-to-peer path performed very well. sub-second latency, smooth 1080p, and multiple viewers without the host machine struggling.</p>
+
+          <p>the first time we tried it across a campus or office network with a restrictive firewall the whole thing fell apart. webrtc prefers direct udp, and when the only thing the network reliably allows is tcp 443 that looks like ordinary tls traffic, the peer connection either never forms or falls back to something painfully slow.</p>
+
+          <p>the change that made it survive was adding a turn server (coturn) and including it in the webrtc ice server configuration as a relay of last resort. when the direct path was blocked, the clients would fall back to the turn candidate, the media would travel over the relayed connection, and the stream remained usable.</p>
+
+          <p>keeping the native webrtc path (instead of forcing everything through a custom layer) mattered because the browser itself gets to evaluate and select the best candidate pair. once the turn entry was present in the ice servers, the fallback was automatic and reliable rather than a complete failure.</p>
+
+          <p>the deployed instance is still up at watch.1petaflop.tech. the full source for both the react client and the node signaling server lives at https://github.com/asucodes/streamit. the short version is simple: use peer-to-peer when the network allows it, fall back to turn when the network is hostile, and keep the signaling layer straightforward.</p>
+
+          <p>that combination was enough to let the application work on the kinds of networks real people actually use.</p>
+        </section>
+      </article>
+    </main>
+
+    <footer>
+      <div class="soc"><a href="https://github.com/asucodes">gh</a></div>
+      <div class="soc"><a href="https://x.com/asupasuyo">x</a></div>
+      <div class="footer-info">asupasuyo · independent · <a href="mailto:onepetaflop@gmail.com">onepetaflop@gmail.com</a></div>
+    </footer>
+  </div>
+  <script src="../js/site.js"></script>
+</body>
+</html>

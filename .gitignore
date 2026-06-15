@@ -1,0 +1,14 @@
+# Raw research / source material (not for public site)
+almashine/
+newslaundry/
+UI/
+githublinks.txt
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp

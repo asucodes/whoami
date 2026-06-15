@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DPI Bypass for Low-Latency Gaming (NKN) - asupasuyo</title>
+  <meta property="og:title" content="DPI Bypass for Low-Latency Gaming (NKN)"/>
+  <meta property="og:description" content="personal dpi bypass setup for fps"/>
+  <meta name="description" content="personal dpi bypass setup for fps"/>
+  <link href="../css/fonts.css" rel="stylesheet"/>
+  <link rel="stylesheet" type="text/css" media="screen" href="../css/main.css"/>
+  <link rel="stylesheet" id="darkModeStyle" type="text/css" href="../css/dark.css"/>
+</head>
+<body>
+  <div class="content">
+    <header>
+      <div class="main" id="main_title">
+        <a href="../index.html">asupasuyo</a>
+      </div>
+      <nav>
+        <a href="../index.html">home</a>
+        <a href="../posts.html">posts</a>
+        <a href="../whoami.html">whoami</a>
+        <a href="#" id="theme-toggle" title="toggle dark">◐</a>
+      </nav>
+    </header>
+
+    <main>
+      <article>
+        <div class="title">
+          <h1 class="title">Bypassing NKN DPI for Low-Latency Gaming with VLESS + uTLS + REALITY</h1>
+          <div class="meta">September 2025 · ~15 min read</div>
+          <a href="https://github.com/asucodes/bypass-DPI-on-firewalls" class="repo-link">full repo + setup.sh + winInstallation + advanced-setup on github</a>
+        </div>
+
+        <section class="body">
+          <p>back in the hostel at NSUT the wifi had become a nightmare. the network was "secured" so aggressively that basic things stopped working. chess.com would just hang. game servers were unreachable. anything that looked even slightly like a game or a vpn got throttled or dropped entirely. the official line was that it was a security measure, but in practice it made the connection useless for anything beyond loading the simplest pages.</p>
+
+          <p>i needed something that actually felt like a local link for fps games. not just something that connected, but something with real low jitter and no added latency. so i started testing everything that claimed it could beat heavy dpi.</p>
+
+          <p>quic, which runs http/3 over udp, got killed almost immediately. hysteria2, the protocol that was getting a lot of hype for its obfuscation and udp punching abilities, also got spotted and ruined the experience. it became clear that the dpi here was not just looking at ports or simple protocol signatures. it was digging into the tls handshake itself.</p>
+
+          <h2>how the dpi actually worked</h2>
+
+          <p>most advanced campus or nkn-style firewalls sit inline and inspect every new tls connection while the initial handshake is still in plaintext. the very first packet a client sends is the clienthello. inside it is the sni, which tells the network exactly which domain you are trying to reach, plus a detailed fingerprint of the entire tls stack: the order of supported ciphers, the list of extensions, the elliptic curves, grease values, and more.</p>
+
+          <p>a real chrome browser on windows produces one very specific fingerprint. most vpn and proxy tools, which are built on go's tls stack by default, produce something completely different. the dpi maintains blocklists for both suspicious sni values and these non-browser fingerprints. udp traffic is especially easy to classify and throttle separately because many "gaming" or "vpn" categories are udp-based. once a flow gets tagged, the latency explodes or the packets simply disappear.</p>
+
+          <p>that meant the only traffic with any real chance of getting through cleanly was normal-looking https over tcp 443 to a legitimate domain, carrying a clienthello that was indistinguishable from chrome.</p>
+
+          <h2>the approach that actually worked</h2>
+
+          <p>the combination that survived was vless over websockets inside tls, fronted by nginx for a real certificate, with utls on the client configured to impersonate chrome. from the firewall's perspective it looked like a browser talking to a duckdns domain with a proper cert. the fingerprint matched because of utls, and the actual proxy data was hidden inside the websocket frames after the handshake completed.</p>
+
+          <p>i later moved the server side to sing-box with reality. in that setup the clienthello carries something like microsoft.com as the sni. the server completes the handshake by talking to the real microsoft endpoint in the background and forwards a legitimate certificate back to the client. the proxy traffic then rides inside that session. the dpi sees what looks like legitimate chrome traffic to microsoft. it is extremely difficult to distinguish without breaking the connection for everyone else.</p>
+
+          <p>i rented a cheap nearby vps, stood up duckdns with certbot, nginx as a reverse proxy, and either xray or sing-box. i generated a uuid, chose a secret websocket path, and configured the client fingerprint. on windows i used v2rayn with the settings from the wininstallation notes in the repo: the duckdns address, port 443, ws transport, the secret path, tls, and fingerprint set to chrome.</p>
+
+          <p>here is the core of the server configuration that mattered:</p>
+
+          <pre><code># after certbot and xray install
+# xray config (simplified)
+{
+  "inbounds": [{
+    "port": 10001,
+    "listen": "127.0.0.1",
+    "protocol": "vless",
+    "settings": { "clients": [{ "id": "YOUR_UUID" }], "decryption": "none" },
+    "streamSettings": { "network": "ws", "wsSettings": { "path": "/my-secret-path" } }
+  }],
+  "outbounds": [{ "protocol": "freedom" }]
+}
+
+# nginx ws location block
+location /my-secret-path {
+  if ($http_upgrade != "websocket") { return 404; }
+  proxy_pass http://127.0.0.1:10001;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+  proxy_set_header Host $host;
+}
+</code></pre>
+
+          <p>on the client side the single most important setting was telling the tool to use a chrome fingerprint. that was what finally made the dpi stop treating the connection as "some go proxy tool" and let the latency drop to something usable for games.</p>
+
+          <h2>a bit more on the v2ray / xray tech</h2>
+
+          <p>v2rayN is the popular Windows GUI client for the V2Ray/Xray proxy platform. Xray is the actively maintained core (a fork of the original V2Ray project) that powers a lot of these tools today. The protocol stack we relied on — VLESS over WebSocket inside TLS — is specifically good at looking like ordinary HTTPS web traffic to DPI systems.</p>
+
+          <p>The two features that mattered most for bypassing the inspection were:</p>
+
+          <ul>
+            <li>uTLS on the client: this library lets the outbound connection spoof the exact TLS ClientHello fingerprint of a real Chrome browser instead of the default Go tls stack that most proxies use by default.</li>
+            <li>Reality on the server: instead of presenting your own certificate, the server impersonates a big legitimate site (microsoft.com in the SNI field for example) and forwards a real certificate it fetches from the actual site. The firewall sees "normal browser talking to microsoft". Your proxy data is hidden inside that session.</li>
+          </ul>
+
+          <p>Here is what the "Add [VLESS] Server" screen in v2rayN looked like with our exact settings (taken from the winInstallation guide in the repo):</p>
+
+          <pre><code>Address (Host): your duck dns url goes here
+
+Port: 443
+
+ID (UUID): The YOUR_UUID you generated 
+
+Flow: (leave this blank)
+
+Encryption: none
+
+Transport (Network): ws (or websocket)
+
+Path: /my-secret-path (or whatever secret path you chose)
+
+Host: your ducks dns url
+
+Transport Layer (Bottom Section): Select tls
+
+SNI : (This will likely auto-fill when you select tls)
+
+Fingerprint: chrome (for better DPI resistance)
+</code></pre>
+
+          <h2>how it played out in practice</h2>
+
+          <p>for a while this was my daily driver. i had posted on x at the time saying something like "NSIT blocked all vpns on wifi so I built my own. Free bird lives" because people kept asking how i was getting playable ping. the config screenshots from that thread are still the ones linked in the post below.</p>
+
+          <div style="border-left:4px solid #50fa7b; padding-left:1em; margin:1em 0; background:#111; color:#ddd;">
+            <p><strong>original post on x</strong></p>
+            <p>"NSIT blocked all vpns on wifi so I built my own. Free bird lives"</p>
+            <p style="font-size:0.9em; color:#aaa;">(follow-up: "i need to make a project ig")</p>
+            <p><a href="https://x.com/asupasuyo/status/1969737791652401512" style="color:#ff4444; font-weight:bold;">view the post on x (with the config screenshots)</a></p>
+          </div>
+
+          <p>the bigger turning point came later when i joined the hostel committee in ramanujan hostel. one of the things i pushed for was a conversation with the warden about how the "security" blocks were way too broad. they were breaking completely normal student activities like chess or low-ping gaming for no good reason. after explaining what was actually happening at the network level, the restrictions got walked back for a lot of the legitimate low-bandwidth use cases. the network became usable again for regular people without everyone having to run custom tunnels just to play a game or use a normal site.</p>
+
+          <p>the full setup.sh, the windows installation steps, and the advanced-setup notes from the time i was tuning latency and jitter are all in the repo.</p>
+
+          <p>this was never really about beating the system for the sake of it. it was about making the network not suck for the things students actually needed and wanted to do.</p>
+
+          <h2>reactions from the group when it started working</h2>
+
+          <p>the real validation came in the hostel group chats once people started using it and the ping dropped enough for actual games.</p>
+
+          <figure class="reaction">
+            <img src="../assets/hostel-reaction-lowping.png" alt="hostel group chat reactions showing low ping success in the game 'toes who nose'" />
+            <div class="chat-embed">
+              <pre>RAMANUJAN HOSTEL '29
+[game screenshot: toes who nose]
+
+Are y bc ye kaise chal gyi ??!!
+55 ping pe kaise
+mere bhi chalade bhai
+Kese chalavi???</pre>
+            </div>
+            <figcaption>hostel group when the bypass dropped the ping enough for actual games. "55 ping pe kaise", "mere bhi chalade bhai"</figcaption>
+          </figure>
+
+          <figure class="reaction">
+            <img src="../assets/hostel-reaction-stonks.png" alt="hostel group chat with stonks meme and 'taras gaya ye khelne ko' reactions" />
+            <div class="chat-embed">
+              <pre>An appeal to Ramanujan Hostel Residents...
+
+mere system tak limited hai abhi, will try to make it scalable after midsems
+[game screenshot]
+
+Bc
+[stonks meme]
+
+Are y bhai taras gaya ye khelne ko ❤️
+Please bataiyo bhai kaise kara</pre>
+            </div>
+            <figcaption>more reactions once it was stable. the stonks and "taras gaya ye khelne ko" energy was real.</figcaption>
+          </figure>
+
+        </section>
+      </article>
+    </main>
+
+    <footer>
+      <div class="soc"><a href="https://github.com/asucodes">gh</a></div>
+      <div class="soc"><a href="https://x.com/asupasuyo">x</a></div>
+      <div class="footer-info">asupasuyo · independent · <a href="mailto:onepetaflop@gmail.com">onepetaflop@gmail.com</a></div>
+    </footer>
+  </div>
+  <script src="../js/site.js"></script>
+</body>
+</html>

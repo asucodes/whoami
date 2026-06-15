@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Newslaundry Paywall Bypass and Hardcoded AES Key - asupasuyo</title>
+  <meta property="og:title" content="Newslaundry Paywall Bypass and Hardcoded AES Key"/>
+  <meta property="og:description" content="newslaundry disclosure"/>
+  <meta name="description" content="newslaundry disclosure"/>
+  <link href="../css/fonts.css" rel="stylesheet"/>
+  <link rel="stylesheet" type="text/css" media="screen" href="../css/main.css"/>
+  <link rel="stylesheet" id="darkModeStyle" type="text/css" href="../css/dark.css"/>
+</head>
+<body>
+  <div class="content">
+    <header>
+      <div class="main" id="main_title">
+        <a href="../index.html">asupasuyo</a>
+      </div>
+      <nav>
+        <a href="../index.html">home</a>
+        <a href="../posts.html">posts</a>
+        <a href="../whoami.html">whoami</a>
+        <a href="#" id="theme-toggle" title="toggle dark">◐</a>
+      </nav>
+    </header>
+
+    <main>
+      <article>
+        <div class="title">
+          <h1 class="title">Newslaundry Paywall Bypass via Redux State Injection and Hardcoded AES Key</h1>
+          <div class="meta">April 2026 (report) · June 2026 (public) · ~10 min read</div>
+          <a href="https://github.com/asucodes" class="repo-link">more research and writeups on github.com/asucodes</a>
+        </div>
+
+        <section class="body">
+          <p>the paywall was never enforced on the server. the backend sent the complete article text, youtube ids, and podcast urls on every request because the content was needed for seo bots and server-side rendering. the react frontend simply looked at a redux flag called fetchSubscription.isActive and decided whether to render the truncated preview or the full piece. once the page had loaded, the entire premium payload was already resident in the browser's memory.</p>
+
+          <p>i spotted this while inspecting the initial html response. the window.__INITIAL_STATE__ object already contained the full cards, the youtube video identifiers, and the podcast stream urls. there was no jwt claim check on the node backend before it serialized that state. anyone who could read the page source or intercept the first network response already had access to the premium material.</p>
+
+          <figure>
+            <img src="../assets/newslaundry-paywall.png" alt="paywall subscribe prompt blocking the article" />
+            <figcaption>standard unauthenticated view. the subscribe box is pure frontend theater.</figcaption>
+          </figure>
+
+          <p>the actual bypass was only about ten lines of javascript. you hook into the react root, inject a fake member object so the early null checks pass, then dispatch the precise redux action the store expects when a subscription becomes active. the paywall component re-renders immediately and the full text, podcasts, and videos appear with no additional network requests and no anomalous logs on the server side.</p>
+
+          <pre><code>(function() {
+  const root = document.querySelector('#container') || document.querySelector('#app');
+  const fiberKey = Object.keys(root).find(k => k.startsWith('__reactContainer'));
+  const store = root[fiberKey].child.memoizedProps.store;
+
+  if (!store.getState().member) {
+    store.getState().member = { id: "audit_999", email: "audit@local.host" };
+  }
+
+  store.dispatch({
+    type: "USER_SUBSCRIPTION_RECEIVED",
+    isActive: true,
+    isRecurring: true,
+    isExpired: false,
+    items: [{ active: true, id: "audit_sub_999", plan_occurrence: "recurring" }]
+  });
+})();
+</code></pre>
+
+          <p>after proving the concept in devtools i built a small chrome extension that injects the identical payload with a single toolbar click. one press and the paywall drops on the live site. the sixty-second video shows the extension working against a real production haffa article with no authentication.</p>
+
+          <p><a href="https://youtu.be/FlPSsmkLqIw" class="poc-video">poc video (60s)</a> — the extension running against the real site with no auth.</p>
+
+          <h2>the key that should not have been there</h2>
+
+          <p>while i was mapping the frontend i also pulled the production source maps, which were being served publicly. that turned the minified bundle back into readable react source in a single step. inside the api.js file there was a function that encrypted payloads for a discord linking endpoint using a symmetric key that was hardcoded directly in the client bundle.</p>
+
+          <pre><code>export function linkDiscordAccount(body) {
+  const strObj = JSON.stringify(body);
+  const enc = CryptoJS.AES.encrypt(strObj, "hackmeNowLOL12345"); // CRITICAL: Hardcoded Secret
+  ...
+}
+</code></pre>
+
+          <p>a symmetric aes key sitting in plaintext in production javascript. the obvious and serious escalation path is that the same secret, or one derived from the same pattern, might have been reused for signing jwts or managing sessions elsewhere. combined with the source maps and the unauthenticated author enumeration endpoint, an attacker would have had everything needed to mint tokens for editors and staff.</p>
+
+          <figure>
+            <img src="../assets/newslaundry-sourcemap.png" alt="chrome devtools sources showing source map loaded for list js" />
+            <figcaption>source map loaded live in production. unminified code right there.</figcaption>
+          </figure>
+
+          <figure>
+            <img src="../assets/newslaundry-bypass.png" alt="article fully readable after bypass, no subscribe overlay" />
+            <figcaption>same article after the state injection. everything visible, no truncation.</figcaption>
+          </figure>
+
+          <h2>disclosure</h2>
+
+          <p>the first report went to subscription@newslaundry.com on 17 april 2026. it included the full technical write-up and a sixty-second proof-of-concept video. the subject line was marked [CRITICAL] and explicitly asked the recipient to forward it to the engineering or security team immediately.</p>
+
+          <figure>
+            <img src="../assets/newslaundry-email1.png" alt="initial disclosure email sent april 17" />
+            <figcaption>first report, april 17.</figcaption>
+          </figure>
+
+          <p>there was no meaningful reply. on 24 april i sent the sixty-day public disclosure notice follow-up and posted publicly on x tagging the account. an informal acknowledgement eventually arrived through a whatsapp contact inside the organisation, but there was never an official patch timeline, request for additional details, or cve.</p>
+
+          <figure>
+            <img src="../assets/newslaundry-email2.png" alt="60 day public disclosure notice email" />
+            <figcaption>follow up with timeline, april 24.</figcaption>
+          </figure>
+
+          <figure>
+            <img src="../assets/newslaundry-xpost.png" alt="x post tagging newslaundry about the report" />
+            <figcaption>public ping on x after no response.</figcaption>
+          </figure>
+
+          <p>the third and final notice went out in june. the sixty-day mark passed with the issues still present in production. this disclosure followed the same coordinated timeline norm used by google project zero. the full report pdf with all the attached screenshots and the video are exactly what was sent to them.</p>
+
+          <h2>what should have happened</h2>
+
+          <p>authorization decisions for premium content need to be enforced on the api responses themselves, not inside the client. the node backend should have inspected the accesstype_jwt claims before deciding which fields to include in the initial hydration state and which cards to return from the stories endpoint.</p>
+
+          <p>the hardcoded aes key should never have left the server. if client-side encryption was genuinely required for the discord linking flow, it should have been session-specific or based on a public-key scheme. production source maps should have been disabled or protected behind authentication, and the author enumeration endpoint should have required authentication or at minimum should not have returned internal ids and email addresses in bulk.</p>
+
+          <p>none of those controls were in place when i looked.</p>
+
+          <p class="meta" style="margin-top:2em;">all the evidence images in this post come from the original disclosure package. the key value and the proof-of-concept script are shown exactly as they existed in the production bundle.</p>
+        </section>
+      </article>
+    </main>
+
+    <footer>
+      <div class="soc"><a href="https://github.com/asucodes">gh</a></div>
+      <div class="soc"><a href="https://x.com/asupasuyo">x</a></div>
+      <div class="footer-info">asupasuyo · independent · <a href="mailto:onepetaflop@gmail.com">onepetaflop@gmail.com</a></div>
+    </footer>
+  </div>
+  <script src="../js/site.js"></script>
+</body>
+</html>
