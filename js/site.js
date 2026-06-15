@@ -78,19 +78,14 @@
     });
   }
 
-  // read more toggle for homepage "other notes" section
+  // read more for homepage "other notes" section (bottom right, blue, reveals extras only)
   var readMore = document.getElementById('read-more');
   var otherNotes = document.getElementById('other-notes');
   if (readMore && otherNotes) {
     readMore.addEventListener('click', function(e) {
       e.preventDefault();
-      if (otherNotes.style.display === 'none' || otherNotes.style.display === '') {
-        otherNotes.style.display = 'block';
-        readMore.textContent = 'show less';
-      } else {
-        otherNotes.style.display = 'none';
-        readMore.textContent = 'read more...';
-      }
+      otherNotes.style.display = 'block';
+      readMore.style.display = 'none';  // hide after click, only show extras
     });
   }
 })();
