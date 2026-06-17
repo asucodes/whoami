@@ -39,6 +39,24 @@
 
           <p>this was never a flaw in oauth itself or in how google behaves. google did exactly what it is supposed to do: it validated the redirect uri it was given and issued the authorization code after the user consented. the entire problem lived in the almashines middleware and the way the consuming application was allowed to supply an untrusted post-login redirect destination with no validation or cryptographic protection.</p>
 
+          <h2>what action was taken</h2>
+
+          <p>i received an acknowledgement email today from amey karkare, dean of resources and alumni at iit kanpur. the team at almashines and the alumni office took quick action. the vulnerability was investigated, verified, and fully remediated within 24 hours of the report. no unauthorized access or data breach occurred.</p>
+
+          <figure>
+            <img src="../assets/acknowledgementEmail.png" alt="acknowledgement email from iit kanpur dean confirming remediation by almashines" />
+            <figcaption>acknowledgement email from the alumni office confirming the issue was investigated and remediated by almashines.</figcaption>
+          </figure>
+
+          <figure>
+            <img src="../assets/partOfConfidentialReport.png" alt="part of the confidential incident report from almashines showing status resolved" />
+            <figcaption>excerpt from the confidential incident report by almashines technologies confirming full resolution.</figcaption>
+          </figure>
+
+          <p>i want to compliment the team at almashines and the iit kanpur alumni office for their prompt and professional response. it's great to see coordinated disclosure leading to fast, effective action within a day.</p>
+
+          <p>the confidential report details the assessment, corrective actions taken, and the security measures now in place.</p>
+
           <h2>the architecture that made the attack possible</h2>
 
           <p>the frontend was leaking the google client ids it was using right in the page source. that alone made mapping the attack surface trivial.</p>
@@ -135,7 +153,7 @@ ngrok http 8080
 
           <p>binding the issued enc token to the original origin (so it is only usable from the expected alumni portal domain) would also prevent simple replay attacks on attacker-controlled hosts.</p>
 
-          <p class="meta" style="margin-top:2em;">the full report, including the leaked client ids from the spa html, the exact malicious initiation urls, the polluted state parameter on the google callback, the 302 location header carrying the enc token, the server access logs showing the exfiltration, and the complete reproduction steps, was sent to contact@almashines.com, alumni_office@iitk.ac.in and dora@iitk.ac.in on 14 june 2026.</p>
+          <p class="meta" style="margin-top:2em;">the full report, including the leaked client ids from the spa html, the exact malicious initiation urls, the polluted state parameter on the google callback, the 302 location header carrying the enc token, the server access logs showing the exfiltration, and the complete reproduction steps, was sent to contact@almashines.com, alumni_office@iitk.ac.in and dora@iitk.ac.in on 14 june 2026. the issue was resolved within 24 hours, with official acknowledgement from the alumni office confirming full remediation and updated security measures.</p>
         </section>
       </article>
     </main>
