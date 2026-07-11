@@ -181,6 +181,12 @@ header {
   margin: 1em 0;
 }
 
+header nav {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+}
+
 header .main {
   font-size: 1.5rem;
 }
@@ -592,5 +598,6 @@ figcaption {
 /* slightly tighter content on mobile */
 @media (max-width: 600px) {
   .content { padding: 0 0.5ch; }
-  header nav a { margin-right: 0.6em; font-size: 0.95rem; }
+  header nav { gap: 0.8rem; }
+  header nav a { font-size: 0.95rem; }
 }
