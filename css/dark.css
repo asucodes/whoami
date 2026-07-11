@@ -176,7 +176,3 @@ a:hover {
     color: whitesmoke;
 }
 
-.feed-nav a.active,
-.feed-nav a:hover {
-    color: #7dd3fc !important;
-}
