@@ -37,14 +37,14 @@
         <h2><a href="posts/newslaundry.html">Newslaundry Paywall Bypass via Redux State Injection and Hardcoded AES Key</a></h2>
         <div class="meta">June 2026 · ~10 min read</div>
         <div class="tags"><span class="tag">disclosure</span><span class="tag">paywall</span><span class="tag">client-side</span></div>
-        <p>the whole premium article was already in the html for seo bots. redux just decided whether to show it. then i found the aes key sitting in the production js. source maps made the rest trivial. sent the report. sixty days later nothing moved.</p>
+        <p>the full premium article was already sitting in the server-rendered html, there for seo bots, redux just gated whether you saw it. digging through the bundle turned up a hardcoded aes key, and the exposed source maps made finding it trivial. reported it. sixty days passed with no fix.</p>
       </div>
 
       <div class="post-teaser" data-tags="disclosure oauth redirect ato">
         <h2><a href="posts/almashines.html">Account Takeover via Open Redirect in Almashines OAuth Middleware (IIT Kanpur Alumni)</a></h2>
         <div class="meta">June 2026 · ~12 min read</div>
         <div class="tags"><span class="tag">disclosure</span><span class="tag">oauth</span><span class="tag">redirect</span></div>
-        <p>almashines (the saas middleware behind the iit kanpur alumni portal) blindly honored a client-controlled od_base after google auth and 302d the enc session token to the attacker. leaked client ids and api responses in the spa made discovery trivial. not an oauth bug — pure architecture fail in a multi-tenant auth layer. lots of the actual codebase and repro commands in the writeup.</p>
+        <p>cient-controlled od_base param, zero server-side validation: almashines 302'd the freshly minted enc session token straight to it after google auth completed. leaked client ids and unguarded api responses in the spa made the attack surface trivial to map. not an oauth bug, architecture fail in a multi-tenant auth layer trusting caller-supplied redirect destinations. full repro and code in the writeup.</p>
       </div>
 
       <div class="post-teaser" data-tags="network vpn dpi bypass">
