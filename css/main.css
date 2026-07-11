@@ -208,7 +208,7 @@ h2 {
 #section-latest {
   font-size: 1.7rem;
   margin-top: 0.5em;
-  color: var(--maincolor);
+  color: #666;
 }
 #section-latest::before {
   content: "" !important;
