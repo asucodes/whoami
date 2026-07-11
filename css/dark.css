@@ -69,7 +69,9 @@ h6::before {
 /* article section headings in dark mode — lighter than the green, readable */
 article h2,
 article h3,
-article h4 {
+article h4,
+main > h2,
+#other-notes h2 {
   color: #7dd3fc;
 }
 

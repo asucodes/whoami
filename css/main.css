@@ -201,9 +201,15 @@ h6 {
   margin-top: 2em;
 }
 
+h2 {
+  font-size: 1.5rem;
+}
+
 article h2,
 article h3,
-article h4 {
+article h4,
+main > h2,
+#other-notes h2 {
   font-size: 1.05rem;
   margin-top: 1.8em;
   color: dodgerblue;
