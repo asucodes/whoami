@@ -205,6 +205,14 @@ h2 {
   font-size: 1.5rem;
 }
 
+#section-latest {
+  font-size: 2rem;
+  margin-top: 0.5em;
+}
+#section-latest::before {
+  content: "" !important;
+}
+
 article h2,
 article h3,
 article h4,
