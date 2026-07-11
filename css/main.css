@@ -204,6 +204,37 @@ article h4 {
   letter-spacing: 0.01em;
 }
 
+/* Feed Header (Discovery Feed style) */
+.feed-header {
+  margin: 3.5em 0 2em 0;
+}
+.feed-title {
+  font-size: 2.8em !important;
+  font-weight: 800 !important;
+  margin: 0 0 10px 0 !important;
+  letter-spacing: -0.03em;
+}
+.feed-title::before {
+  content: none !important;
+}
+.feed-nav {
+  font-size: 1.15em;
+  display: flex;
+  gap: 15px;
+}
+.feed-nav a {
+  text-decoration: none;
+  border-bottom: none;
+}
+.feed-nav a.active {
+  color: dodgerblue;
+  font-weight: 600;
+}
+.feed-nav a:hover {
+  background: transparent;
+  color: dodgerblue;
+}
+
 h1::before {
   color: var(--maincolor);
   content: "# ";

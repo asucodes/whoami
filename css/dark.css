@@ -170,9 +170,13 @@ a:hover {
     color: royalblue;
 }
 
-.highlight pre code[class*='language-md']::before,
 .highlight pre code[class*='language-md']::before {
     content: 'Markdown';
     background: royalblue;
     color: whitesmoke;
+}
+
+.feed-nav a.active,
+.feed-nav a:hover {
+    color: #7dd3fc !important;
 }
