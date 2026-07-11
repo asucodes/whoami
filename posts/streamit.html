@@ -35,19 +35,29 @@
         </div>
 
         <section class="body">
-          <p>streamit began as a small experiment in real-time shared viewing. one person would share their screen or camera while others watched with minimal delay and chatted in real time, complete with gifs and floating reactions. the stack was a react frontend, a node server using socket.io for signaling, and native webrtc through simple-peer for the actual media streams.</p>
+          <p>streamit started as a small experiment: one person shares their screen or camera, others watch with minimal delay, with a live chat that supported gifs and floating reactions. the stack was react on the frontend, node with socket.io for signaling, and native webrtc through simple-peer for the actual media streams. on a clean local network it worked well. sub-second latency, smooth 1080p, no major issues.</p>
 
-          <p>on a clean local network or a normal residential connection the peer-to-peer path performed very well. sub-second latency, smooth 1080p, and multiple viewers without the host machine struggling.</p>
+          <p>the first time we tried it on the nsut hostel network, nothing connected. the webrtc call setup would start, both sides would exchange signaling messages through the socket.io server fine, and then just... nothing. the stream never arrived.</p>
 
-          <p>the first time we tried it across a campus or office network with a restrictive firewall the whole thing fell apart. webrtc prefers direct udp, and when the only thing the network reliably allows is tcp 443 that looks like ordinary tls traffic, the peer connection either never forms or falls back to something painfully slow.</p>
+          <h2>why webrtc breaks on restricted networks</h2>
 
-          <p>the change that made it survive was adding a turn server (coturn) and including it in the webrtc ice server configuration as a relay of last resort. when the direct path was blocked, the clients would fall back to the turn candidate, the media would travel over the relayed connection, and the stream remained usable.</p>
+          <p>webrtc uses a process called ice (interactive connectivity establishment) to figure out how to connect two peers. when a connection is being set up, each side gathers a list of candidates: network interfaces it can be reached at. these candidates go through three types:</p>
 
-          <p>keeping the native webrtc path (instead of forcing everything through a custom layer) mattered because the browser itself gets to evaluate and select the best candidate pair. once the turn entry was present in the ice servers, the fallback was automatic and reliable rather than a complete failure.</p>
+          <p>first it tries the direct local address (host candidate). then it talks to a stun server to discover what its public ip looks like from the outside and adds that as a server-reflexive candidate. finally, if a turn server is configured, it adds a relayed candidate through the turn server.</p>
 
-          <p>the deployed instance is still up at watch.1petaflop.tech. the full source for both the react client and the node signaling server lives at https://github.com/asucodes/streamit. the short version is simple: use peer-to-peer when the network allows it, fall back to turn when the network is hostile, and keep the signaling layer straightforward.</p>
+          <p>the problem with a restrictive campus network is that udp is usually heavily filtered or blocked entirely. webrtc prefers udp because of latency. when udp gets blocked, the ice process fails to establish a direct p2p path even if the stun discovery itself succeeded. the connection either never forms, or it picks a terrible fallback that causes the kind of lag where the stream is five seconds behind and the audio breaks apart.</p>
 
-          <p>that combination was enough to let the application work on the kinds of networks real people actually use.</p>
+          <p>i checked the browser console during one of the failed attempts and saw the ice state flipping to "failed" pretty quickly. the candidates that were being gathered were all udp-based. there was no turn server in the config, so when those udp paths were blocked, there was nothing to fall back to.</p>
+
+          <h2>the fix: coturn as relay of last resort</h2>
+
+          <p>the change that made it work was adding a coturn server to the ice server configuration and including turn candidates alongside the stun ones. when the direct udp path failed (which it did, every time, on that network), ice would fall back to the turn candidate automatically. the media would travel through the relay, and the stream became usable.</p>
+
+          <p>the webrtc api already handles this transparently. you add the turn server to the ice server list with credentials, and from that point the browser evaluates all candidates and picks the best one that actually works. on a normal network the direct path wins and the turn server is never used. on a restricted network the relay kicks in without any code changes.</p>
+
+          <p>keeping native webrtc (instead of routing everything through a custom layer) mattered because the browser does the candidate selection for you. the connection quality with a turn relay was noticeably worse than direct p2p, but it was functional, which was the entire point.</p>
+
+          <p>the deployed instance is at <a href="https://watch.1petaflop.tech">watch.1petaflop.tech</a>. the full source for the react client and the node signaling server is at <a href="https://github.com/asucodes/streamit">github.com/asucodes/streamit</a>. the short version: use peer-to-peer when the network allows it, fall back to turn when it doesn't, and don't try to handle the selection yourself.</p>
         </section>
       </article>
     </main>

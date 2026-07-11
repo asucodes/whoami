@@ -20,17 +20,23 @@ hr {
 }
 
 code {
-    background-color: lightblue;
-    color: black;
-    text-decoration: bold;
-    padding: 0.1em 0.2em;
+  background-color: #2a2a35;
+  color: #7dd3fc;
+  padding: 0.1em 0.3em;
+  border-radius: 2px;
 }
 
 pre {
-    background-color: #272822;
-    line-height: 1.4;
-    overflow-x: auto;
-    padding: 1em;
+  background-color: #1a1a2e;
+  border-left: 3px solid #50fa7b;
+  line-height: 1.5;
+  overflow-x: auto;
+  padding: 1em 1.2em;
+}
+
+pre code {
+  background: transparent;
+  color: #e8e8e8;
 }
 
 blockquote {
@@ -51,29 +57,20 @@ h1::before {
     content: "# ";
 }
 
-h2::before {
-    color: var(--darkMaincolor);
-    content: "## ";
-}
-
-h3::before {
-    color: var(--darkMaincolor);
-    content: "### ";
-}
-
-h4::before {
-    color: var(--darkMaincolor);
-    content: "#### ";
-}
-
-h5::before {
-    color: var(--darkMaincolor);
-    content: "##### ";
-}
-
+/* h1 keeps the # prefix — h2+ no prefix, same as light mode */
+h2::before,
+h3::before,
+h4::before,
+h5::before,
 h6::before {
-    color: var(--darkMaincolor);
-    content: "###### ";
+  content: "";
+}
+
+/* article section headings in dark mode — lighter than the green, readable */
+article h2,
+article h3,
+article h4 {
+  color: #a8a8c0;
 }
 
 a {

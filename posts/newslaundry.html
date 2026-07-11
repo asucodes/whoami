@@ -35,9 +35,9 @@
         </div>
 
         <section class="body">
-          <p>the paywall was never enforced on the server. the backend sent the complete article text, youtube ids, and podcast urls on every request because the content was needed for seo bots and server-side rendering. the react frontend simply looked at a redux flag called fetchSubscription.isActive and decided whether to render the truncated preview or the full piece. once the page had loaded, the entire premium payload was already resident in the browser's memory.</p>
+          <p>the paywall was never enforced on the server. the backend sent the complete article text, youtube ids, and podcast urls on every request because the content was needed for seo bots and server-side rendering. the react frontend just looked at a redux flag called <code>fetchSubscription.isActive</code> and decided whether to render the preview or the full piece. the entire premium payload was already sitting in the browser's memory before you even saw the subscribe button.</p>
 
-          <p>i spotted this while inspecting the initial html response. the window.__INITIAL_STATE__ object already contained the full cards, the youtube video identifiers, and the podcast stream urls. there was no jwt claim check on the node backend before it serialized that state. anyone who could read the page source or intercept the first network response already had access to the premium material.</p>
+          <p>i spotted this while looking at the initial html response. the <code>window.__INITIAL_STATE__</code> object had full cards, youtube video ids, and podcast stream urls in it. no jwt check on the node backend before it serialized that state. anyone reading the page source or intercepting the first network response had access to the premium content already, without any of the subscription checks the frontend was pretending to enforce.</p>
 
           <figure>
             <img src="../assets/newslaundry-paywall.png" alt="paywall subscribe prompt blocking the article" />
@@ -69,7 +69,7 @@
 
           <p><a href="https://youtu.be/FlPSsmkLqIw" class="poc-video">poc video (60s)</a> — the extension running against the real site with no auth.</p>
 
-          <h2>the key that should not have been there</h2>
+          <h2>the aes key in the bundle</h2>
 
           <p>while i was mapping the frontend i also pulled the production source maps, which were being served publicly. that turned the minified bundle back into readable react source in a single step. inside the api.js file there was a function that encrypted payloads for a discord linking endpoint using a symmetric key that was hardcoded directly in the client bundle.</p>
 
@@ -80,7 +80,7 @@
 }
 </code></pre>
 
-          <p>a symmetric aes key sitting in plaintext in production javascript. the obvious and serious escalation path is that the same secret, or one derived from the same pattern, might have been reused for signing jwts or managing sessions elsewhere. combined with the source maps and the unauthenticated author enumeration endpoint, an attacker would have had everything needed to mint tokens for editors and staff.</p>
+          <p>a symmetric aes key sitting in plaintext in production javascript. the obvious escalation path is that the same secret, or something derived from the same pattern, might have been reused elsewhere for signing jwts or managing sessions. combined with the public source maps and the unauthenticated author enumeration endpoint, an attacker would have had most of what they needed to mint tokens for editors and staff. i didn't pursue that chain, but it's worth noting that <code>hackmeNowLOL12345</code> is not a key someone created by accident.</p>
 
           <figure>
             <img src="../assets/newslaundry-sourcemap.png" alt="chrome devtools sources showing source map loaded for list js" />
@@ -92,7 +92,7 @@
             <figcaption>same article after the state injection. everything visible, no truncation.</figcaption>
           </figure>
 
-          <h2>disclosure</h2>
+          <h2>disclosure timeline</h2>
 
           <p>the first report went to subscription@newslaundry.com on 17 april 2026. it included the full technical write-up and a sixty-second proof-of-concept video. the subject line was marked [CRITICAL] and explicitly asked the recipient to forward it to the engineering or security team immediately.</p>
 
@@ -115,13 +115,13 @@
 
           <p>the third and final notice went out in june. the sixty-day mark passed with the issues still present in production. this disclosure followed the same coordinated timeline norm used by google project zero. the full report pdf with all the attached screenshots and the video are exactly what was sent to them.</p>
 
-          <h2>what should have happened</h2>
+          <h2>what the fix looks like</h2>
 
           <p>authorization decisions for premium content need to be enforced on the api responses themselves, not inside the client. the node backend should have inspected the accesstype_jwt claims before deciding which fields to include in the initial hydration state and which cards to return from the stories endpoint.</p>
 
           <p>the hardcoded aes key should never have left the server. if client-side encryption was genuinely required for the discord linking flow, it should have been session-specific or based on a public-key scheme. production source maps should have been disabled or protected behind authentication, and the author enumeration endpoint should have required authentication or at minimum should not have returned internal ids and email addresses in bulk.</p>
 
-          <p>none of those controls were in place when i looked.</p>
+          <p>none of those controls were in place when i looked. the hardcoded key is still the part that stays with me — not because it's the most dangerous finding on its own, but because it's the kind of thing that signals how much trust was being placed in the frontend as a security boundary. once you see a key named <code>hackmeNowLOL12345</code> sitting in a production bundle, you stop being surprised by the rest.</p>
 
           <p class="meta" style="margin-top:2em;">all the evidence images in this post come from the original disclosure package. the key value and the proof-of-concept script are shown exactly as they existed in the production bundle.</p>
         </section>

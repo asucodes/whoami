@@ -35,13 +35,15 @@
         </div>
 
         <section class="body">
-          <p>back in the hostel at NSUT the wifi had become a nightmare. the network was "secured" so aggressively that basic things stopped working. chess.com would just hang. game servers were unreachable. anything that looked even slightly like a game or a vpn got throttled or dropped entirely. the official line was that it was a security measure, but in practice it made the connection useless for anything beyond loading the simplest pages.</p>
+          <p>back in the hostel at NSUT the wifi had become a nightmare. the network was locked down so aggressively that basic things stopped working. chess.com would just hang. game servers were unreachable. anything that looked even slightly like a vpn or a game client got throttled or dropped entirely. the official explanation was that it was a security measure, but in practice it made the connection useless for anything beyond loading the simplest pages.</p>
 
-          <p>i needed something that actually felt like a local link for fps games. not just something that connected, but something with real low jitter and no added latency. so i started testing everything that claimed it could beat heavy dpi.</p>
+          <p>i needed something that actually felt like a local link for fps games. not just something that connected, but something with real low jitter and no added latency. so i started testing everything that claimed it could beat heavy dpi. the question i kept coming back to was: how is nobody else bothered enough by this to figure it out? how are people just okay with chess.com being blocked on a university network?</p>
 
-          <p>quic, which runs http/3 over udp, got killed almost immediately. hysteria2, the protocol that was getting a lot of hype for its obfuscation and udp punching abilities, also got spotted and ruined the experience. it became clear that the dpi here was not just looking at ports or simple protocol signatures. it was digging into the tls handshake itself.</p>
+          <p>quic, which runs http/3 over udp, got killed almost immediately. hysteria2 was getting a lot of attention at the time because of its aggressive bandwidth congestion control and udp obfuscation, so i tried that next. it worked for about thirty seconds before the connection quality collapsed. i later found out that hysteria2's udp patterns are relatively easy to classify at volume even when the payload is encrypted. the dpi here wasn't just looking at ports or simple protocol signatures. it was doing something deeper.</p>
 
-          <h2>how the dpi actually worked</h2>
+          <p>ikev2 and the standard vpn protocols were all dead on arrival. any server that showed up in a blocklist was gone. even obscure wireguard setups on non-standard ports got spotted. i read through everything i could find at the time on what specifically nkn-style firewalls inspect, and the answer that kept coming up was the tls fingerprint in the clienthello.</p>
+
+          <h2>what the dpi is actually inspecting</h2>
 
           <p>most advanced campus or nkn-style firewalls sit inline and inspect every new tls connection while the initial handshake is still in plaintext. the very first packet a client sends is the clienthello. inside it is the sni, which tells the network exactly which domain you are trying to reach, plus a detailed fingerprint of the entire tls stack: the order of supported ciphers, the list of extensions, the elliptic curves, grease values, and more.</p>
 
@@ -49,7 +51,7 @@
 
           <p>that meant the only traffic with any real chance of getting through cleanly was normal-looking https over tcp 443 to a legitimate domain, carrying a clienthello that was indistinguishable from chrome.</p>
 
-          <h2>the approach that actually worked</h2>
+          <h2>what finally worked, and why</h2>
 
           <p>the combination that survived was vless over websockets inside tls, fronted by nginx for a real certificate, with utls on the client configured to impersonate chrome. from the firewall's perspective it looked like a browser talking to a duckdns domain with a proper cert. the fingerprint matched because of utls, and the actual proxy data was hidden inside the websocket frames after the handshake completed.</p>
 
@@ -85,7 +87,7 @@ location /my-secret-path {
 
           <p>on the client side the single most important setting was telling the tool to use a chrome fingerprint. that was what finally made the dpi stop treating the connection as "some go proxy tool" and let the latency drop to something usable for games.</p>
 
-          <h2>a bit more on the v2ray / xray tech</h2>
+          <h2>vless, xray, utls: what these actually do</h2>
 
           <p>v2rayN is the popular Windows GUI client for the V2Ray/Xray proxy platform. Xray is the actively maintained core (a fork of the original V2Ray project) that powers a lot of these tools today. The protocol stack we relied on — VLESS over WebSocket inside TLS — is specifically good at looking like ordinary HTTPS web traffic to DPI systems.</p>
 

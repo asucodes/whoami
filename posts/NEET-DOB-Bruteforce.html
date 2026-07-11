@@ -35,11 +35,13 @@
         </div>
 
         <section class="body">
-          <p>neet 2024 turned into a complete mess. after the grace marks were handed out and then partially rolled back, multiple students ended up listed with air 1. the result lookup portal was still using the old simple form: you entered an application number and a date of birth. if the dob was correct the scorecard appeared. if not it just said the scorecard had not been generated yet. it was a classic low-entropy oracle exposed to the public on a high-stakes national exam.</p>
+          <p>in 2024, the neet ug result came out and immediately something seemed off. there were multiple students listed as air 1 simultaneously, a grace mark distribution that got partially rolled back after the fact, and ongoing allegations of a paper leak that still haven't fully resolved. the central exam authority, nta, was under pressure from all sides and the result portal became one of the few public-facing pieces of the whole system that anyone could actually poke at.</p>
 
-          <p>after following the public drama — the paper leak allegations, the grace mark rollback for over fifteen hundred candidates, the sudden cluster of toppers — i got curious. if an application number ever leaked (a hall ticket photo shared in a group, a list that got around, anything), how easy would it actually be for someone to walk the realistic dob range and pull the full result? i decided to do the research myself with a selenium harness. the goal was never to target real students. it was to demonstrate how fragile the lookup design was on a system that should have had much stronger protections.</p>
+          <p>the portal at the time was straightforward: you entered an application number and a date of birth. if the dob matched, you got the scorecard. if not, it said the scorecard hadn't been generated yet. no error that distinguished "wrong dob" from "application number doesn't exist". no rate limiting that i could detect. no captcha worth the name. it was a low-entropy oracle sitting exposed on a national exam with fifteen hundred candidates suddenly listed with identical marks.</p>
 
-          <h2>setup notes for headless selenium</h2>
+          <p>after following the controversy, i got curious how fragile the lookup actually was. if an application number ever leaked (a hall ticket photo in a whatsapp group, a list that circulated, anything) how many dates of birth would you actually need to try? the realistic range for someone who appeared for neet 2024 is somewhere between 2003 and 2007. that's about five years, twelve months each, thirty-one days each. roughly 1860 combinations. i decided to build the selenium harness and run it myself to see how long it would actually take on a real connection. the goal wasn't to target anyone. it was to know what the number was.</p>
+
+          <h2>running it: headless selenium setup</h2>
 
           <p>you need a real chrome binary and a matching chromedriver. the most reliable way these days is to use the official chrome for testing builds from google. download the matching chrome-win64 and chromedriver-win64 packages for the version you want (the script was originally tested against 126.x).</p>
 
@@ -51,7 +53,7 @@
 
           <p>for headless runs (no visible browser window) uncomment the --headless line in the options and remove the artificial time.sleep that was only there during initial visual testing. you can use --headless=new or the older flag depending on your chrome version. the usual disable-gpu, no-sandbox, and disable-dev-shm-usage flags help when running on minimal machines or in containers.</p>
 
-          <h2>the core logic (cleaned)</h2>
+          <h2>the script</h2>
 
           <pre><code>from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -155,9 +157,9 @@ brute_force_dates("240410136941")
 
           <p>the loop is deliberately slow in the visible version so you can watch it type and submit. for real runs drop the sleep and run headless. the swal overlay handling is there because the site throws a modal on every submit, even the failing ones.</p>
 
-          <h2>why this still matters</h2>
+          <h2>how long it actually takes</h2>
 
-          <p>if an application number ever leaks (printed on a hall ticket left on a desk, in a group chat, in a data dump from somewhere else), a motivated person can recover the dob and therefore the full result and rank. public result portals that use low entropy secrets like dob as the second factor are oracles by design.</p>
+          <p>on a real connection, with the 0.2s sleep in the loop and the modal handling overhead, a full walk of the 2003–2007 range takes somewhere between two and four hours depending on network latency to the nta servers. that's not instant. but it's also not a meaningful barrier for someone with a motive and an application number. i'm not sure what i expected, but the answer being "a few hours of automation" felt like it deserved to be written down.</p>
 
           <p>the proper fix is obvious. a high-stakes national exam result portal should not rely on a six-digit application number plus a date of birth that can be walked in a narrow range. either move the lookup behind real authentication, add rate limiting and captcha that actually hold up against automation, or both.</p>
 

