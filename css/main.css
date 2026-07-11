@@ -9,7 +9,7 @@
 
 html {
   color: #232333;
-  font-family: "Roboto Mono", monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 16px;
   line-height: 1.7em;
 }
