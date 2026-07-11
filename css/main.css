@@ -263,7 +263,7 @@ main > h2::before {
 }
 
 .meta {
-  color: #999;
+  color: #666;
   letter-spacing: -0.5px;
 }
 
@@ -299,11 +299,11 @@ footer {
 }
 
 time {
-  color: grey;
+  color: #666;
 }
 
 span {
-  color: grey;
+  color: #666;
 }
 
 /* Posts */
