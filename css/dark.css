@@ -70,8 +70,7 @@ h6::before {
 article h2,
 article h3,
 article h4,
-main > h2,
-#other-notes h2 {
+main > h2 {
   color: #7dd3fc;
 }
 
