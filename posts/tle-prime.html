@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>From a Discussion Thread to the Video Library: Hacking TLE Prime - asupasuyo</title>
+  <meta property="og:title" content="From a Discussion Thread to the Video Library: Hacking TLE Prime"/>
+  <meta property="og:description" content="how a discussion thread led me through TLE Prime's app and video token chain"/>
+  <meta name="description" content="how a discussion thread led me through TLE Prime's app and video token chain"/>
+  <link href="../css/fonts.css" rel="stylesheet"/>
+  <link rel="stylesheet" type="text/css" media="screen" href="../css/main.css"/>
+  <link rel="stylesheet" id="darkModeStyle" type="text/css" href="../css/dark.css"/>
+</head>
+<body>
+  <div class="content">
+    <header>
+      <div class="main" id="main_title"><a href="../index.html">asupasuyo</a></div>
+      <nav>
+        <a href="../index.html">home</a>
+        <a href="../posts.html">posts</a>
+        <a href="../whoami.html">whoami</a>
+        <a href="#" id="theme-toggle" title="toggle dark">◐</a>
+      </nav>
+    </header>
+    <main>
+      <article>
+        <div class="title">
+          <h1 class="title">From a Discussion Thread to the Video Library: Hacking TLE Prime</h1>
+          <div class="meta">October 2026 · ~12 min read</div>
+        </div>
+        <section class="body">
+
+          <p>I have been using TLE Eliminators for a while, their CP-31 sheet specifically, which is genuinely one of the better ways to find Codeforces problems matched to your rating. I used to grind CP pretty consistently for a stretch and was almost pupil, until the platform started drowning in cheaters and contests stopped feeling fair. this was around same time I got interested in security and bug hunting, and competitive programming quietly fell off my schedule entirely. I'll probably come back to it once second semester at IITK rolls around and we have ES0207A (data structures and algorithms course), which seems like a natural excuse to pick it up again. But that's later.</p>
+
+          <figure>
+            <img src="../assets/tle/codeforces.png" alt="Codeforces rating graph and activity calendar" />
+            <figcaption>image showing me doing cf consistently before I gave up on it</figcaption>
+          </figure>
+
+          <h2>TLE Prime launches</h2>
+
+          <p>Priyansh, the founder of TLE Eliminators and an ICPC World Finalist, had been building hype for TLE Prime on X for days with his tweets and teasers about prime. I pre registered and when the product finally launched, I couldn't wait to try it out.</p>
+
+          <p>So I did. I was clicking through the new features, checking out what new topics were added, when I noticed that users could enter formatted content in discussion threads, code snippets and rich text and such. My brain did the thing it does. "That renders user input as HTML." I tried submitting a basic HTML file and it rendered right there on the page.</p>
+
+          <figure>
+            <img src="../assets/tle/XSSPROOF.png" alt="TLE discussion showing the XSS proof banner" />
+            <figcaption>the discussion rendered my test content as HTML.</figcaption>
+          </figure>
+
+          <p> a CVSS before I even started a recon.</p>
+
+          <h2>Not stopping at XSS</h2>
+
+          <p>A stored XSS on its own is already a reportable finding, but XSS can be chained with account takeover, and I wanted to see how far this chain actually went. For that I needed to do proper recon.</p>
+
+          <p>My first instinct was to log into <a href="https://github.com/asucodes/OpenCode">OpenCode</a> and automate the process, but it wouldn't cooperate. It's cautious about running recon against live websites, which, fair enough. So I reached for my other project, <a href="https://github.com/asucodes/OpenIntercept">OpenIntercept</a>, which lets you intercept and modify what an AI model sees when it fetches web content. I forged the response for www.tle-eliminators.com/security to make it look like TLE runs an in-scope bug bounty programme, and the model believed me. OpenIntercept was built for exactly this kind of thing, controlling what context an AI agent operates under, and here it earned its keep. Recon started.</p>
+
+          <h2>The bundle: one app, two hosts</h2>
+
+          <p>The site is a React SPA, and the first useful observation was that www.tle-eliminators.com and dashboard.tle-eliminators.com serve the same bundle, identical main.&lt;hash&gt;.js. One application behind two hostnames, with marketing pages and the authenticated product living in one codebase. That meant a single round of bundle analysis covered the entire attack surface, and every API endpoint, route, or secret baked into the client would apply to both domains at once.</p>
+
+          <h2>Getting past the request-signing wall</h2>
+
+          <p>This was the gateway challenge, because every API call carries x-signature and x-timestamp headers, and replaying requests outside the browser just fails until you recover the signing scheme.</p>
+
+          <p>The scheme turned out to be clean. It's HMAC-SHA256 computed over the string METHOD:/path:timestamp, where the path is lowercased with the query string stripped and trailing slash trimmed. The key was sitting right there in the client bundle: 0ca2db72..., 32 bytes as ASCII. The full header family is x-timestamp, x-signature, x-timezone: Asia/Calcutta, and x-local-date, and as a bonus the server leaks its own clock via x-server-timestamp while the "Request Expired" error bodies let you measure skew precisely.</p>
+
+          <pre><code>HMAC-SHA256("POST:/public/cp-sheet/discussions/add:1698500000", "0ca2db72...")</code></pre>
+
+          <p>Once I could sign arbitrary requests, the whole API opened up. The embedded signing key is a finding on its own (it's in the report as finding #7), but its real value was as a skeleton key that unlocked every door after it.</p>
+
+          <h2>The discussion feature</h2>
+
+          <p>Bundle and traffic analysis surfaced the CP-31 sheet APIs, and the one that mattered was the discussion endpoint:</p>
+
+          <pre><code>POST https://backend-2.tle-eliminators.com/public/cp-sheet/discussions/add
+{
+  "messageParams": {
+    "content": "...",
+    "problemId": "..."
+  }
+}</code></pre>
+
+          <p>A public, community discussion feature where users post free-form content that gets rendered for every visitor on the company's main product domain. This is where impact-first thinking had been pointing from the start.</p>
+
+          <h2>Where the bug actually was</h2>
+
+          <p>Tracing the render path led me to webpack module 29549, which renders discussion messages using dangerouslySetInnerHTML. The only guard in front of it was this:</p>
+
+          <pre><code>Kg = (n) =&gt; typeof n === "string"</code></pre>
+
+          <p>Is it a string? Then render it as HTML. That's a type check, not a security check.</p>
+
+          <p>Nearby in module 64437 there was a sanitizer-like function (Uy()) that looked like it should have been the real defense, but it was broken, it didn't actually sanitize against the threat model it appeared to address. The combination is textbook stored XSS: an input that survives as a string, a render sink that treats strings as raw HTML, and a sanitizer that provides false comfort to anyone reading the code.</p>
+
+          <h2>Three proof-of-concept payloads</h2>
+
+          <p>I posted three PoC comments to the "Collecting Game" problem thread (problemId = 659121083120ec879284fc21), each one escalating in what it demonstrated:</p>
+
+          <p>The first was an &lt;img onerror&gt; payload (message ID 6ad6574846e12914a2e570eb) that confirmed arbitrary JavaScript execution. The second was a red banner injection, visual defacement of a trusted page, the kind of thing that makes a product team's stomach drop. The third was what I called "the black ATO box," a fake session-hijacked UI illustrating the account-takeover endgame. Not a real takeover (this was all on my own account), but a proof that the chain from XSS to credential theft is trivially short.</p>
+
+          <h2>The video layer: where the real keys live</h2>
+
+          <p>This is the part I'm most interested in talking about, because it's a chain of issues, not a single bug.</p>
+
+          <p>TLE doesn't host course videos itself. Every lecture is a TPStreams asset (org code 7a9xf3), streamed from a CloudFront distribution (d218w4e0ylb3ya.cloudfront.net) with Widevine DRM on the media segments. On paper, that's a correct architecture: encrypted segments, per-asset access tokens, a license server. The pieces are all there.</p>
+
+          <p>The chain starts with what the dashboard hands to the browser. When you open any lecture you're allowed to see, even a free preview on a non-paying account, the module content API returns something like this:</p>
+
+          <pre><code>{
+  "lectureIframeEmbedUrl": "https://app.tpstreams.com/embed/7a9xf3/9Bf8t4q7RgG/?access_token=169b18cd-...",
+  "drmAccessToken": "169b18cd-2f2b-4bae-9295-3bdd59a18c31",
+  "tpStreamsAssetId": "9Bf8t4q7RgG",
+  "hlsManifestUrl": "https://d218w4e0ylb3ya.cloudfront.net/transcoded/9Bf8t4q7RgG/video.m3u8",
+  "subtitleTracks": [{ "url": ".../transcoded/9Bf8t4q7RgG/en_976c6d.vtt" }]
+}</code></pre>
+
+          <p>A UUID access token, the asset ID, the org code, and direct manifest URLs, all client-side because the player needs it. That's normal and alone it's not a bug. The chain forms because of three properties of that token, and I tested each one directly.</p>
+
+          <h3>Property 1: the token is org-scoped, not asset-scoped</h3>
+
+          <p>I took the token from a free preview lecture and pointed the TPStreams metadata API at assets I had no entitlement to:</p>
+
+          <pre><code>GET /api/v1/7a9xf3/assets/{otherAssetId}/?access_token={previewToken}
+→ 200 OK</code></pre>
+
+          <p>Full metadata came back for every asset in the org, including assets belonging to paid self-paced courses. One lecture's token reads the whole library.</p>
+
+          <h3>Property 2: the token never expires</h3>
+
+          <p>The Wayback Machine had archived TPStreams embed URLs from TLE pages, and those URLs contain access tokens baked right into them. I pulled tokens archived in August 2025 and June 2026, fourteen-plus months old, and replayed them against the metadata API. All returned 200. A token leaked today is a key that works indefinitely, with no valid_until and no rotation visible anywhere in the flow.</p>
+
+          <h3>Property 3: authorization happens before asset binding</h3>
+
+          <p>The DRM license endpoint is where asset-level enforcement should live. I probed it with a token from asset A and an asset ID of asset B:</p>
+
+          <pre><code>POST /api/v1/7a9xf3/assets/{assetB}/drm_license/?access_token={tokenA}&amp;drm_type=widevine
+→ 400 "Error in generating license: No message provided"</code></pre>
+
+          <p>Compare that to sending no token at all, which returns 401 Authentication credentials were not provided. The endpoint accepted the cross-asset token and then failed on the malformed Widevine challenge, meaning the entitlement check either doesn't exist or runs after the point where a real client would already be past it.</p>
+
+          <p>I stopped there deliberately. Producing a full decrypt needs a real CDM, and I chose not to go further. So let me be honest about this step: the authorization ordering strongly suggests cross-asset playback is possible, but I did not execute it end-to-end.</p>
+
+          <h2>What held up, and what didn't</h2>
+
+          <p>The media encryption itself held up. Every video and audio segment is CENC/SAMPLE-AES encrypted (enca/tenc/senc boxes verified in the segment containers), so there's no plaintext video leak. But the same unauthenticated CloudFront distribution serves the subtitle and transcript VTT files in plaintext (en_976c6d.vtt, 55 KB of lecture transcript, zero auth required), slide PDFs sit on a public Spaces bucket, and the anti-piracy watermark is a client-side canvas overlay that a one-line fillText override removes and which by definition never exists in any downloaded copy.</p>
+
+          <h2>The two chains</h2>
+
+          <p>Chain A (no XSS needed): free account → preview lecture → token drops into the browser → token is org-scoped and non-expiring → entire video library's metadata and transcripts accessible, and very likely playback for anyone with a CDM.</p>
+
+          <p>Chain B (the compounding one): stored XSS on tle-eliminators.com → attacker JS runs in the app origin → same-origin authenticated fetches against the dashboard API → harvest drmAccessToken and asset IDs from every lecture a victim can see → those tokens never expire, so a single XSS victim becomes a permanent key into the paid video layer.</p>
+
+          <p>Chain B is the nasty one. One person visits a discussion thread with your payload and you have a non-expiring token to their entire course library. Then the next person visits. And the next.</p>
+
+          <h2>What happened next</h2>
+
+          <p>I posted about the findings on X.</p>
+
+          <figure>
+            <img src="../assets/tle/tweet.jpg" alt="X post about the TLE Prime findings" />
+            <figcaption>the post about the findings.</figcaption>
+          </figure>
+
+          <p>It went somewhat viral, and within a few hours Priyansh reached out to me directly.</p>
+
+          <figure>
+            <img src="../assets/tle/chatpriyansh.png" alt="Chat with Priyansh arranging a call" />
+            <figcaption>Priyansh got in touch to arrange a call.</figcaption>
+          </figure>
+
+          <p>We got on a call. He asked me to delete the tweet since it might motivate others to test against the platform, which is a fair ask. I walked him and the team through the full chain start to finish, and they were good about it. They thanked me, offered TLE Prime access for further testing, and mentioned an internship later this year. I haven't made up my mind on the internship part, courses at IITK are pretty demanding and I only have about 18 months of coursework left before mandatory internship kicks in, so we'll see.</p>
+
+          <h2>Things to take away from this</h2>
+
+          <p>The interesting thing about this whole engagement isn't any single vulnerability. It's how they compose. An XSS that would be medium-severity on its own becomes the entry point for permanent access to a paid video library once you chain it with an org-scoped, non-expiring access token and an authorization model that checks identity but not entitlement.</p>
+
+          <p>Most of this was found by reading JavaScript. Not running exploits, not firing up Burp, not brute-forcing endpoints. Just reading the bundle, understanding the data flow, following the tokens. The signing key was in the bundle. The dangerouslySetInnerHTML was in the bundle. The org code and API structure were in the bundle. The whole story was sitting in one minified JavaScript file, waiting for someone to read it.</p>
+        </section>
+      </article>
+    </main>
+    <footer>
+      <div class="soc"><a href="https://github.com/asucodes">gh</a></div>
+      <div class="soc"><a href="https://x.com/asupasuyo">x</a></div>
+      <div class="footer-info">asupasuyo · independent</div>
+    </footer>
+  </div>
+  <script src="../js/site.js"></script>
+</body>
+</html>
